@@ -1,0 +1,6 @@
+# Optional: LayoutLMv3 fine-tuning and inference (GPU strongly recommended)
+-r requirements.txt
+torch>=2.1
+transformers>=4.40
+datasets>=2.18
+seqeval>=1.2.2

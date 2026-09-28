@@ -1,0 +1,48 @@
+ocr:
+  engine: auto
+  dpi: 300
+  lang: eng
+  psm: 6
+  min_text_chars_per_page: 40
+
+extraction:
+  extractor: rules_layout
+  dayfirst: true
+  learned_model: models/learned_tagger.joblib
+  layoutlm_model: models/layoutlmv3-finetuned
+  agreement_bonus: 0.06
+
+review:
+  auto_approve_threshold: 0.86
+  review_threshold: 0.55
+  field_auto_threshold: 0.80
+  field_thresholds:
+    total_amount: 0.85
+    subtotal: 0.85
+    tax_amount: 0.85
+    invoice_number: 0.85
+    vendor_gstin: 0.85
+    issue_date: 0.85
+    due_date: 0.80
+    vendor_name: 0.75
+    buyer_name: 0.75
+    currency: 0.55
+    document_type: 0.60
+  block_on_arithmetic: true
+  max_review_tasks: 25
+
+validation:
+  money_tolerance: 0.01
+  tax_tolerance_ratio: 0.02
+  max_future_days: 1
+  max_age_days: 3650
+  require_gstin_checksum: false
+  duplicate_invoice_window_days: 90
+
+store:
+  db_path: data/docintel.db
+  search_top_k: 10
+  snippet_chars: 220
+
+dataset_dir: data
+benchmarks_dir: benchmarks/results
