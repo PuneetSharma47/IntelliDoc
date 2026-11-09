@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IntelliDoc — extraction console</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #14181f;
+    --muted: #667085;
+    --line: #e4e7ec;
+    --accent: #1f4e8c;
+    --good: #0b7a45;
+    --warn: #b26a00;
+    --bad: #b42318;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 22px; background: #10233f; color: #fff;
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+  header .sub { font-size: 12px; color: #a9bcd6; }
+  .kpis { display: flex; gap: 18px; font-size: 12px; color: #cddcf0; }
+  .kpis b { display: block; font-size: 16px; color: #fff; font-weight: 600; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 18px; padding: 18px; align-items: start; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+    margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  .panel .body { padding: 14px; }
+  .drop {
+    border: 1.5px dashed #c3cbd8; border-radius: 8px; padding: 18px; text-align: center;
+    color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop.hover { border-color: var(--accent); background: #f0f5fc; }
+  .drop strong { color: var(--ink); }
+  input[type=file] { display: none; }
+  .doclist { list-style: none; margin: 12px 0 0; padding: 0; max-height: 62vh; overflow: auto; }
+  .doclist li {
+    padding: 9px 10px; border-radius: 8px; cursor: pointer; display: flex;
+    justify-content: space-between; gap: 8px; align-items: center;
+  }
+  .doclist li:hover { background: #f2f5f9; }
+  .doclist li.active { background: #e8effa; }
+  .doclist .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doclist .meta { font-size: 11px; color: var(--muted); }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+    border: 1px solid transparent; font-weight: 600;
+  }
+  .badge.auto_approved { color: var(--good); background: #e7f6ec; border-color: #bfe6cd; }
+  .badge.needs_review { color: var(--warn); background: #fdf3e3; border-color: #f2ddb4; }
+  .badge.rejected { color: var(--bad); background: #fdeceb; border-color: #f5c9c5; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  td.value { font-family: var(--mono); font-size: 12.5px; }
+  td.num { font-family: var(--mono); text-align: right; }
+  .bar { height: 6px; border-radius: 4px; background: #eceff4; overflow: hidden; width: 74px; }
+  .bar span { display: block; height: 100%; }
+  .conf { display: flex; align-items: center; gap: 8px; }
+  .conf small { color: var(--muted); font-family: var(--mono); }
+  .src { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .issues { list-style: none; margin: 0; padding: 0; }
+  .issues li {
+    padding: 8px 10px; border-left: 3px solid var(--line); margin-bottom: 6px; background: #fafbfc;
+    font-size: 12.5px; border-radius: 0 6px 6px 0;
+  }
+  .issues li.blocking { border-left-color: var(--bad); background: #fdf3f2; }
+  .issues li.warning { border-left-color: var(--warn); background: #fdf9f0; }
+  .issues code { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .split { display: grid; grid-template-columns: 1fr 380px; gap: 18px; }
+  @media (max-width: 1280px) { .split { grid-template-columns: 1fr; } }
+  .pageview { background: #eef1f5; border-radius: 8px; padding: 10px; text-align: center; }
+  .pageview img { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=text], input[type=search] {
+    font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line);
+    border-radius: 7px; width: 100%; background: #fff;
+  }
+  .muted { color: var(--muted); }
+  .searchhits { list-style: none; margin: 10px 0 0; padding: 0; }
+  .searchhits li { padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .searchhits li:hover { background: #f2f5f9; }
+  .searchhits .snip { font-size: 12px; color: #3d4655; }
+  .searchhits .where { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+  .empty { padding: 26px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .tag { font-family: var(--mono); font-size: 11px; background: #eef1f5; padding: 1px 6px; border-radius: 4px; color: #475467; }
+  .toast {
+    position: fixed; bottom: 18px; right: 18px; background: #10233f; color: #fff; padding: 10px 14px;
+    border-radius: 8px; font-size: 13px; opacity: 0; transform: translateY(8px); transition: all .2s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>IntelliDoc</h1>
+    <div class="sub">layout-aware extraction · validation · human review</div>
+  </div>
+  <div class="kpis">
+    <div><b id="kpi-docs">–</b>documents</div>
+    <div><b id="kpi-review">–</b>open review tasks</div>
+    <div><b id="kpi-corr">–</b>corrections</div>
+    <div><b id="kpi-conf">–</b>mean field confidence</div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="panel">
+      <h2>Ingest</h2>
+      <div class="body">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" />
+          <div><strong>Drop a document</strong> or click to choose</div>
+          <div class="muted" style="font-size:12px;margin-top:4px">PDF, PNG, JPG · processed on upload</div>
+        </label>
+        <div class="toolbar" style="margin-top:10px">
+          <button id="refresh">Refresh</button>
+          <button id="seed">Load demo files</button>
+        </div>
+        <div class="muted" id="uploadstate" style="font-size:12px;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Library</h2>
+      <div class="body" style="padding-bottom:6px">
+        <input type="search" id="q" placeholder="Search page text (e.g. GSTIN, HDFC, INV-1048)" />
+        <ul class="searchhits" id="hits"></ul>
+      </div>
+      <ul class="doclist" id="docs"></ul>
+    </div>
+  </section>
+
+  <section id="detail">
+    <div class="panel"><div class="empty">Upload or select a document to inspect its extracted fields.</div></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const state = { docs: [], current: null, page: 0 };
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function esc(text) {
+  return String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function confColor(c) {
+  if (c >= 0.85) return '#0b7a45';
+  if (c >= 0.6) return '#b26a00';
+  return '#b42318';
+}
+
+async function refreshStats() {
+  const res = await fetch('/api/stats');
+  const data = await res.json();
+  const s = data.stats || {};
+  document.getElementById('kpi-docs').textContent = s.documents ?? 0;
+  document.getElementById('kpi-review').textContent = s.open_review_tasks ?? 0;
+  document.getElementById('kpi-corr').textContent = s.corrections ?? 0;
+  document.getElementById('kpi-conf').textContent = (s.mean_field_confidence ?? 0).toFixed(2);
+}
+
+async function loadDocs() {
+  const res = await fetch('/api/documents?limit=100');
+  const data = await res.json();
+  state.docs = data.documents || [];
+  const list = document.getElementById('docs');
+  if (!state.docs.length) {
+    list.innerHTML = '<li class="muted" style="cursor:default">No documents yet. Upload one or click “Load demo files”.</li>';
+    return;
+  }
+  list.innerHTML = state.docs.map(d => `
+    <li data-id="${esc(d.doc_id)}" class="${state.current === d.doc_id ? 'active' : ''}">
+      <div>
+        <div class="name">${esc(d.filename)}</div>
+        <div class="meta">${esc(d.doc_type || '')} · ${d.page_count}p · ${esc(d.extractor || '')} · ${(d.latency_ms || 0).toFixed(1)} ms</div>
+      </div>
+      <span class="badge ${esc(d.status)}">${esc((d.status || '').replace('_', ' '))}</span>
+    </li>`).join('');
+  list.querySelectorAll('li[data-id]').forEach(li =>
+    li.addEventListener('click', () => openDoc(li.dataset.id)));
+}
+
+function fieldRow(f) {
+  const display = f.corrected !== null && f.corrected !== undefined ? f.corrected : f.value;
+  const corrected = f.corrected !== null && f.corrected !== undefined;
+  const color = confColor(f.confidence || 0);
+  return `
+    <tr>
+      <td><strong>${esc(f.name)}</strong>${corrected ? ' <span class="tag">corrected</span>' : ''}</td>
+      <td class="value">${esc(display)}</td>
+      <td>
+        <div class="conf">
+          <div class="bar"><span style="width:${Math.round((f.confidence || 0) * 100)}%;background:${color}"></span></div>
+          <small>${(f.confidence || 0).toFixed(2)}</small>
+        </div>
+      </td>
+      <td><div class="src">p${f.page} · ${esc(f.rule || '')}</div></td>
+      <td><input type="text" data-field="${esc(f.name)}" placeholder="correct…" style="width:120px;padding:4px 8px;font-size:12px" /></td>
+    </tr>`;
+}
+
+async function openDoc(docId, page) {
+  state.current = docId;
+  state.page = page || 0;
+  document.querySelectorAll('.doclist li').forEach(li =>
+    li.classList.toggle('active', li.dataset.id === docId));
+  const res = await fetch(`/api/documents/${encodeURIComponent(docId)}`);
+  if (!res.ok) { toast('Could not load document'); return; }
+  const d = await res.json();
+  const issues = (d.issues || []).map(i => `
+    <li class="${esc(i.severity)}"><code>${esc(i.code)}</code> — ${esc(i.message)}</li>`).join('')
+    || '<li class="muted" style="border-left-color:#0b7a45">No validation issues.</li>';
+  const tasks = (d.review_tasks || []).filter(t => t.status === 'open');
+  const tasksHtml = tasks.length ? `
+    <div class="panel" style="margin-top:14px">
+      <h2>Review queue (${tasks.length})</h2>
+      <div class="body"><table>
+        <thead><tr><th>field</th><th>reason</th><th>priority</th><th>detail</th></tr></thead>
+        <tbody>${tasks.map(t => `<tr>
+          <td>${esc(t.field || '—')}</td>
+          <td><span class="tag">${esc(t.reason)}</span></td>
+          <td class="num">${(t.priority || 0).toFixed(2)}</td>
+          <td class="muted" style="font-size:12px">${esc(t.detail || '')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>` : '';
+
+  document.getElementById('detail').innerHTML = `
+    <div class="panel">
+      <h2>${esc(d.filename)}</h2>
+      <div class="body">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+          <div class="row">
+            <span class="badge ${esc(d.status)}">${esc((d.status || '').replace('_', ' '))}</span>
+            <span class="tag">${esc(d.doc_type)} · ${(d.doc_type_confidence || 0).toFixed(2)}</span>
+            <span class="tag">${esc(d.extractor)}</span>
+            <span class="tag">${esc(d.engine)}</span>
+            <span class="tag">${(d.latency_ms || 0).toFixed(1)} ms</span>
+          </div>
+          <div class="toolbar">
+            ${d.page_count > 1 ? `<button id="prev">◀ page</button><span class="muted" id="pagelabel">1 / ${d.page_count}</span><button id="next">page ▶</button>` : ''}
+            <button class="primary" id="approve">Approve document</button>
+          </div>
+        </div>
+        <div class="split" style="margin-top:14px">
+          <div>
+            <table>
+              <thead><tr><th>field</th><th>value</th><th>confidence</th><th>source</th><th>fix</th></tr></thead>
+              <tbody>${(d.fields || []).map(fieldRow).join('')}</tbody>
+            </table>
+          </div>
+          <div>
+            <div class="pageview">
+              <img id="pageimg" src="/api/documents/${encodeURIComponent(docId)}/page/${state.page}.png" alt="page render" />
+              <div class="muted" style="font-size:11px;margin-top:6px">highlighted: extracted fields, coloured by confidence</div>
+            </div>
+            <ul class="issues" style="margin-top:12px">${issues}</ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${tasksHtml}`;
+
+  document.querySelectorAll('#detail input[data-field]').forEach(input => {
+    input.addEventListener('keydown', async ev => {
+      if (ev.key !== 'Enter' || !input.value.trim()) return;
+      const field = input.dataset.field;
+      const value = input.value.trim();
+      const res = await fetch(`/api/documents/${encodeURIComponent(docId)}/correct`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, value: /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value })
+      });
+      if (res.ok) { toast(`${field} corrected`); refreshStats(); loadDocs(); openDoc(docId, state.page); }
+      else { toast('Correction failed'); }
+    });
+  });
+
+  const approve = document.getElementById('approve');
+  if (approve) approve.addEventListener('click', async () => {
+    await fetch(`/api/documents/${encodeURIComponent(docId)}/approve`, { method: 'POST' });
+    toast('Document approved'); refreshStats(); loadDocs(); openDoc(docId, state.page);
+  });
+  const prev = document.getElementById('prev');
+  const next = document.getElementById('next');
+  const label = document.getElementById('pagelabel');
+  if (prev) prev.addEventListener('click', () => {
+    state.page = Math.max(0, state.page - 1);
+    document.getElementById('pageimg').src = `/api/documents/${encodeURIComponent(docId)}/page/${state.page}.png`;
+    label.textContent = `${state.page + 1} / ${d.page_count}`;
+  });
+  if (next) next.addEventListener('click', () => {
+    state.page = Math.min(d.page_count - 1, state.page + 1);
+    document.getElementById('pageimg').src = `/api/documents/${encodeURIComponent(docId)}/page/${state.page}.png`;
+    label.textContent = `${state.page + 1} / ${d.page_count}`;
+  });
+}
+
+async function upload(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  const el = document.getElementById('uploadstate');
+  for (const file of list) {
+    el.textContent = `Processing ${file.name}…`;
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/documents', { method: 'POST', body: form });
+    if (!res.ok) { toast(`${file.name}: ${res.status}`); continue; }
+    const data = await res.json();
+    el.textContent = `${file.name} → ${data.status.replace('_', ' ')} (${(data.fields.total_amount || {}).value ?? '—'})`;
+  }
+  await refreshStats(); await loadDocs();
+  if (state.docs.length) openDoc(state.docs[0].doc_id);
+}
+
+const drop = document.getElementById('drop');
+document.getElementById('file').addEventListener('change', e => upload(e.target.files));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('hover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('hover'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('hover'); upload(e.dataTransfer.files);
+});
+document.getElementById('refresh').addEventListener('click', () => { refreshStats(); loadDocs(); });
+document.getElementById('seed').addEventListener('click', async () => {
+  const res = await fetch('/api/seed', { method: 'POST' });
+  if (res.ok) { const d = await res.json(); toast(`Loaded ${d.count} demo documents`); refreshStats(); loadDocs(); }
+  else { toast('No demo files available'); }
+});
+
+let timer = null;
+document.getElementById('q').addEventListener('input', ev => {
+  clearTimeout(timer);
+  const q = ev.target.value.trim();
+  const hits = document.getElementById('hits');
+  if (q.length < 2) { hits.innerHTML = ''; return; }
+  timer = setTimeout(async () => {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    hits.innerHTML = (data.hits || []).length
+      ? data.hits.map(h => `<li data-doc="${esc(h.doc_id)}" data-page="${h.page}">
+          <div class="where">${esc(h.filename)} · page ${h.page + 1} · score ${h.score.toFixed(2)}</div>
+          <div class="snip">${esc(h.snippet)}</div>
+        </li>`).join('')
+      : `<li class="muted" style="cursor:default">No page matched “${esc(q)}”.</li>`;
+    hits.querySelectorAll('li[data-doc]').forEach(li =>
+      li.addEventListener('click', () => openDoc(li.dataset.doc, Number(li.dataset.page))));
+  }, 220);
+});
+
+refreshStats();
+loadDocs();
+</script>
+</body>
+</html>
